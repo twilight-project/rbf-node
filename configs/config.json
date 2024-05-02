@@ -1,0 +1,9 @@
+{
+    "accountName": "validator-sfo",
+    "nyks_url": "https://nyks.twilight-explorer.com/api",
+    "btc_node_ip_and_port": "143.244.138.170:8332",
+    "btc_node_username": "bitcoin",
+    "btc_node_password": "Persario_1",
+    "wallet_name": "mywallet",
+    "new_wallet": false
+}
