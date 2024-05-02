@@ -5,5 +5,10 @@
     "btc_node_username": "bitcoin",
     "btc_node_password": "Persario_1",
     "wallet_name": "mywallet",
-    "new_wallet": false
-}
+    "new_wallet": false,
+    "DB_host": "",
+    "DB_port": "",
+    "DB_user": "",
+    "DB_password": "",
+    "DB_name": ""
+ }
