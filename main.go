@@ -22,7 +22,6 @@ func initialize() {
 		fmt.Println("Error reading config file: ", err)
 	}
 
-	newWallet := viper.GetBool("new_wallet")
 	walletName := viper.GetString("wallet_name")
 
 	if walletName == "" {
@@ -30,13 +29,13 @@ func initialize() {
 		os.Exit(1)
 	}
 
-	if newWallet == true {
-		_, err := utils.CreateWallet(walletName)
-		if err != nil {
-			fmt.Println("Failed to create wallet: ", err)
-			os.Exit(1)
-		}
-	}
+	// if newWallet == true {
+	// 	_, err := utils.CreateWallet(walletName)
+	// 	if err != nil {
+	// 		fmt.Println("Failed to create wallet: ", err)
+	// 		os.Exit(1)
+	// 	}
+	// }
 	DbConn = db.InitDB()
 }
 

@@ -96,54 +96,54 @@ func CreateTxFromHex(txHex string) (*wire.MsgTx, error) {
 	return tx, nil
 }
 
-func CreateWallet(walletName string) (*btcjson.CreateWalletResult, error) {
-	var err error
-	connCfg := &rpcclient.ConnConfig{
-		Host:         fmt.Sprintf("%v", viper.Get("btc_node_ip_and_port")),
-		User:         fmt.Sprintf("%v", viper.Get("btc_node_username")),
-		Pass:         fmt.Sprintf("%v", viper.Get("btc_node_password")),
-		HTTPPostMode: true,
-		DisableTLS:   true,
-	}
+// func CreateWallet(walletName string) (*btcjson.CreateWalletResult, error) {
+// 	var err error
+// 	connCfg := &rpcclient.ConnConfig{
+// 		Host:         fmt.Sprintf("%v", viper.Get("btc_node_ip_and_port")),
+// 		User:         fmt.Sprintf("%v", viper.Get("btc_node_username")),
+// 		Pass:         fmt.Sprintf("%v", viper.Get("btc_node_password")),
+// 		HTTPPostMode: true,
+// 		DisableTLS:   true,
+// 	}
 
-	client, err := rpcclient.New(connCfg, nil)
-	if err != nil {
-		fmt.Println("Failed to connect to the Bitcoin client : ", err)
-	}
+// 	client, err := rpcclient.New(connCfg, nil)
+// 	if err != nil {
+// 		fmt.Println("Failed to connect to the Bitcoin client : ", err)
+// 	}
 
-	defer client.Shutdown()
+// 	defer client.Shutdown()
 
-	var walletsRaw json.RawMessage
-	walletsRaw, err = client.RawRequest("listwallets", nil)
-	if err != nil {
-		fmt.Println("Error listing wallets: ", err)
-		return nil, err
-	}
+// 	var walletsRaw json.RawMessage
+// 	walletsRaw, err = client.RawRequest("listwallets", nil)
+// 	if err != nil {
+// 		fmt.Println("Error listing wallets: ", err)
+// 		return nil, err
+// 	}
 
-	var wallets []string
-	err = json.Unmarshal(walletsRaw, &wallets)
-	if err != nil {
-		fmt.Println("Error unmarshalling wallets: ", err)
-		return nil, err
-	}
+// 	var wallets []string
+// 	err = json.Unmarshal(walletsRaw, &wallets)
+// 	if err != nil {
+// 		fmt.Println("Error unmarshalling wallets: ", err)
+// 		return nil, err
+// 	}
 
-	for _, wallet := range wallets {
-		if wallet == walletName {
-			fmt.Println("Wallet already exists")
-			return nil, err
-		}
-	}
+// 	for _, wallet := range wallets {
+// 		if wallet == walletName {
+// 			fmt.Println("Wallet already exists")
+// 			return nil, err
+// 		}
+// 	}
 
-	var wallet *btcjson.CreateWalletResult
-	wallet, err = client.CreateWallet(walletName, rpcclient.WithCreateWalletAvoidReuse(), rpcclient.WithCreateWalletBlank())
-	if err != nil {
-		fmt.Println("Failed to create wallet: ", err)
-		return nil, err
-	}
+// 	var wallet *btcjson.CreateWalletResult
+// 	wallet, err = client.CreateWallet(walletName, rpcclient.WithCreateWalletAvoidReuse(), rpcclient.WithCreateWalletBlank())
+// 	if err != nil {
+// 		fmt.Println("Failed to create wallet: ", err)
+// 		return nil, err
+// 	}
 
-	fmt.Println("Wallet created successfully")
-	return wallet, nil
-}
+// 	fmt.Println("Wallet created successfully")
+// 	return wallet, nil
+// }
 
 func GetUnspentUTXOs(walletName string) ([]btcjson.ListUnspentResult, error) {
 	client := getBitcoinRpcClient()
