@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 
+	_ "github.com/lib/pq"
+
 	"github.com/spf13/viper"
 )
 
