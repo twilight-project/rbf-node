@@ -14,7 +14,7 @@ import (
 	"github.com/twilight-project/rbf-node/utils"
 )
 
-func NyksEventListener(event string, accountName string, functionCall string, dbconn *sql.DB) {
+func NyksEventListener(event string, functionCall string, dbconn *sql.DB) {
 	headers := make(map[string][]string)
 	headers["Content-Type"] = []string{"application/json"}
 	nyksd_url := fmt.Sprintf("%v", viper.Get("nyksd_socket_url"))
@@ -83,21 +83,21 @@ func NyksEventListener(event string, accountName string, functionCall string, db
 
 		switch functionCall {
 		case "broadcastRefund":
-			go broadcastRefund(accountName)
+			go broadcastRefund()
 		case "broadcastSweep":
-			go BroadcastSweep(accountName, dbconn)
+			go BroadcastSweep(dbconn)
 		default:
 			log.Println("Unknown function :", functionCall)
 		}
 	}
 }
 
-func broadcastRefund(accountName string) {
-	fmt.Println("broadcasting refund for account : ", accountName)
+func broadcastRefund() {
+	fmt.Println("broadcasting refund transaction")
 }
 
-func BroadcastSweep(accountName string, dbconn *sql.DB) {
-	fmt.Println("broadcasting sweep for account : ", accountName)
+func BroadcastSweep(dbconn *sql.DB) {
+	fmt.Println("broadcasting sweep transaction")
 	tx := utils.GetBroadCastedSweepTx()
 	sweepTx, err := utils.CreateTxFromHex(tx.SignedSweepTx)
 	if err != nil {
