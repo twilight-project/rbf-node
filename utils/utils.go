@@ -283,7 +283,7 @@ func GetBroadCastedRefundTx() types.BroadcastRefundMsg {
 	return a.BroadcastRefundMsg[0]
 }
 
-func GetBroadCastedSweepTx() types.BroadcastSweepMsg {
+func GetBroadCastedSweepTx() (types.BroadcastSweepMsg, error) {
 	nyksd_url := fmt.Sprintf("%v", viper.Get("nyksd_url"))
 	path := fmt.Sprintf("/twilight-project/nyks/bridge/broadcast_tx_sweep_all")
 	resp, err := http.Get(nyksd_url + path)
@@ -301,7 +301,10 @@ func GetBroadCastedSweepTx() types.BroadcastSweepMsg {
 	if err != nil {
 		fmt.Println("error unmarshalling broadcasted refund : ", err)
 	}
-	return a.BroadcastSweepMsg[0]
+	if len(a.BroadcastSweepMsg) > 0 {
+		return a.BroadcastSweepMsg[0], nil
+	}
+	return types.BroadcastSweepMsg{}, fmt.Errorf("No sweep transaction found")
 }
 
 func BroadcastOnBtc(dbconn *sql.DB) {

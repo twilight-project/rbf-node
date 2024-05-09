@@ -98,7 +98,10 @@ func broadcastRefund() {
 
 func BroadcastSweep(dbconn *sql.DB) {
 	fmt.Println("broadcasting sweep transaction")
-	tx := utils.GetBroadCastedSweepTx()
+	tx, err := utils.GetBroadCastedSweepTx()
+	if err != nil {
+		return
+	}
 	sweepTx, err := utils.CreateTxFromHex(tx.SignedSweepTx)
 	if err != nil {
 		fmt.Println("Failed to create sweep transaction : ", err)
