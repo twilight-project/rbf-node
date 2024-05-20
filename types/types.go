@@ -116,3 +116,8 @@ type BroadcastSweepMsg struct {
 type BroadcastSweepMsgResp struct {
 	BroadcastSweepMsg []BroadcastSweepMsg
 }
+
+type RBFRequest struct {
+	Txhex  string
+	Amount int32
+}

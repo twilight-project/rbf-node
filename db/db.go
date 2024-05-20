@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"log"
 
-	_ "github.com/lib/pq"
-
 	"github.com/spf13/viper"
 )
 
@@ -23,6 +21,29 @@ func InitDB() *sql.DB {
 
 func QuerySignedTx(dbconn *sql.DB, unlock_height int64) [][]byte {
 	DB_reader, err := dbconn.Query("select tx from signed_tx where unlock_height <= $1", unlock_height)
+	if err != nil {
+		fmt.Println("An error occured while query script signed tx: ", err)
+	}
+
+	defer DB_reader.Close()
+	txs := [][]byte{}
+
+	for DB_reader.Next() {
+		tx := []byte{}
+		err := DB_reader.Scan(
+			&tx,
+		)
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		txs = append(txs, tx)
+	}
+	return txs
+}
+
+func QuerySignedTxAll(dbconn *sql.DB) [][]byte {
+	DB_reader, err := dbconn.Query("select tx from signed_tx;")
 	if err != nil {
 		fmt.Println("An error occured while query script signed tx: ", err)
 	}

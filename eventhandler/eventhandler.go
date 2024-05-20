@@ -82,18 +82,12 @@ func NyksEventListener(event string, functionCall string, dbconn *sql.DB) {
 		}
 
 		switch functionCall {
-		case "broadcastRefund":
-			go broadcastRefund()
 		case "broadcastSweep":
 			go BroadcastSweep(dbconn)
 		default:
 			log.Println("Unknown function :", functionCall)
 		}
 	}
-}
-
-func broadcastRefund() {
-	fmt.Println("broadcasting refund transaction")
 }
 
 func BroadcastSweep(dbconn *sql.DB) {

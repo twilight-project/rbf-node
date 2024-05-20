@@ -47,7 +47,7 @@ func GetFeeFromBtcNode(tx *wire.MsgTx) (int64, error) {
 
 func getBitcoinRpcClient() *rpcclient.Client {
 	host := viper.GetString("btc_node_ip_and_port")
-	walletName := viper.GetString("wallet_name")
+	walletName := viper.GetString("btc_core_wallet_name")
 
 	host = host + "/wallet/" + walletName
 	connCfg := &rpcclient.ConnConfig{
@@ -323,7 +323,6 @@ func BroadcastOnBtc(dbconn *sql.DB) {
 				fmt.Println("error decodeing signed transaction btc broadcaster : ", err)
 			}
 			BroadcastBtcTransaction(wireTransaction)
-			db.DeleteSignedTx(dbconn, tx)
 		}
 	}
 }
@@ -359,4 +358,150 @@ func GetHeightFromScript(script string) int64 {
 	}
 
 	return height
+}
+
+func CheckPinning(dbconn *sql.DB) {
+	client := getBitcoinRpcClient()
+	defer client.Shutdown()
+
+	for {
+		// Get the list of transactions in the mempool
+		txs := db.QuerySignedTxAll(dbconn)
+		for _, tx := range txs {
+			transaction := hex.EncodeToString(tx)
+			wireTransaction, err := CreateTxFromHex(transaction)
+			if err != nil {
+				fmt.Println("error decodeing signed transaction btc broadcaster : ", err)
+				continue
+			}
+			utxo := wireTransaction.TxHash().String()
+
+			txids, err := client.GetRawMempool()
+			if err != nil {
+				fmt.Println("Failed to get mempool transactions: ", err)
+				continue
+			}
+
+			// Check each transaction in the mempool
+			for _, txid := range txids {
+				rawTx, err := client.GetRawTransaction(txid)
+				if err != nil {
+					fmt.Println("Failed to get raw transaction: ", err)
+					continue
+				}
+
+				decodedTx := rawTx.MsgTx()
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				// Check each input in the transaction
+				for _, vin := range decodedTx.TxIn {
+					if vin.PreviousOutPoint.Hash.String() == utxo {
+						fmt.Printf("Transaction %s in the mempool spends UTXO \n", txid)
+					}
+				}
+			}
+		}
+	}
+}
+
+func ReplaceByFee(tx *wire.MsgTx, amount int32) {
+	walletName := viper.GetString("btc_core_wallet_name")
+	client := getBitcoinRpcClient()
+	defer client.Shutdown()
+
+	newAmountAdded := float64(0)
+
+	utxos, err := GetUnspentUTXOs(walletName)
+	if err != nil {
+		fmt.Println("Failed to get unspent UTXOs: ", err)
+	}
+	for _, utxo := range utxos {
+		for _, vin := range tx.TxIn {
+			if utxo.TxID == vin.PreviousOutPoint.Hash.String() {
+				continue
+			}
+		}
+
+		hash, err := chainhash.NewHashFromStr(utxo.TxID)
+		if err != nil {
+			fmt.Println("Failed to create hash from string: ", err)
+			return
+		}
+		outPoint := wire.NewOutPoint(hash, utxo.Vout)
+		txIn := wire.NewTxIn(outPoint, nil, nil)
+		tx.AddTxIn(txIn)
+
+		input := tx.TxIn[int64(len(tx.TxIn))]
+		witnessInputs := make([]btcjson.RawTxWitnessInput, 1)
+		witnessInputs[1] = btcjson.RawTxWitnessInput{
+			Txid: input.PreviousOutPoint.Hash.String(),
+			Vout: input.PreviousOutPoint.Index,
+		}
+
+		tx, _, err := client.SignRawTransactionWithWallet3(tx, witnessInputs, rpcclient.SigHashType(txscript.SigHashAll|txscript.SigHashAnyOneCanPay))
+
+		newAmountAdded += utxo.Amount
+
+		if newAmountAdded == float64(amount) {
+			break
+		}
+
+		if newAmountAdded > float64(amount) {
+			addr, err := client.GetNewAddress(walletName)
+			if err != nil {
+				fmt.Println("Error getting new address: ", err)
+				return
+			}
+
+			// Generate the pay-to-address script.
+			destinationAddrByte, err := txscript.PayToAddrScript(addr)
+			if err != nil {
+				fmt.Println("Error generating pay-to-address script:", err)
+				return
+			}
+			amount := newAmountAdded - float64(amount)
+			txOut := wire.NewTxOut(int64(amount), destinationAddrByte)
+			tx.AddTxOut(txOut)
+			break
+		}
+
+	}
+
+	if newAmountAdded < float64(amount) {
+		fmt.Println("Insufficient funds")
+		return
+	}
+
+	BroadcastBtcTransaction(tx)
+	fmt.Printf("Broadcasted RBF transaction with txid %s\n", tx.TxHash().String())
+}
+
+func ConfirmTx(dbconn *sql.DB) {
+	client := getBitcoinRpcClient()
+	defer client.Shutdown()
+
+	for {
+		signed_txs := db.QuerySignedTxAll(dbconn)
+
+		for _, tx := range signed_txs {
+			transaction := hex.EncodeToString(tx)
+			wireTransaction, err := CreateTxFromHex(transaction)
+			txHash, err := chainhash.NewHashFromStr(wireTransaction.TxHash().String())
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
+
+			txHashResult, err := client.GetRawTransactionVerbose(txHash)
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
+
+			fmt.Printf("Transaction details: %+v\n", txHashResult)
+			db.DeleteSignedTx(dbconn, tx)
+		}
+	}
 }
