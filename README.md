@@ -45,7 +45,7 @@ Below is the sample for config file placed in configs folder. once you clone the
  ```
 
 ### DB Schema
-Use the below sql command to create the required schema
+Use the below sql command to create the required table in postgres
 
 ```sql
 CREATE TABLE signed_tx (
