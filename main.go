@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 
+	_ "github.com/lib/pq"
 	"github.com/spf13/viper"
 	"github.com/twilight-project/rbf-node/db"
 	"github.com/twilight-project/rbf-node/eventhandler"
