@@ -283,28 +283,28 @@ func GetBroadCastedRefundTx() types.BroadcastRefundMsg {
 	return a.BroadcastRefundMsg[0]
 }
 
-func GetBroadCastedSweepTx() (types.BroadcastSweepMsg, error) {
+func GetBroadCastedSweepTx() (types.BroadcastTxSweepMsg, error) {
 	nyksd_url := fmt.Sprintf("%v", viper.Get("nyksd_url"))
 	path := fmt.Sprintf("/twilight-project/nyks/bridge/broadcast_tx_sweep_all")
 	resp, err := http.Get(nyksd_url + path)
 	if err != nil {
-		fmt.Println("error getting broadcasted refund : ", err)
+		fmt.Println("error getting broadcasted sweep : ", err)
 	}
 	//We Read the response body on the line below.
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Println("error getting broadcasted refund body : ", err)
+		fmt.Println("error getting broadcasted sweep body : ", err)
 	}
 
 	a := types.BroadcastSweepMsgResp{}
 	err = json.Unmarshal(body, &a)
 	if err != nil {
-		fmt.Println("error unmarshalling broadcasted refund : ", err)
+		fmt.Println("error unmarshalling broadcasted sweep : ", err)
 	}
-	if len(a.BroadcastSweepMsg) > 0 {
-		return a.BroadcastSweepMsg[0], nil
+	if len(a.BroadcastTxSweepMsg) > 0 {
+		return a.BroadcastTxSweepMsg[0], nil
 	}
-	return types.BroadcastSweepMsg{}, fmt.Errorf("No sweep transaction found")
+	return types.BroadcastTxSweepMsg{}, fmt.Errorf("No sweep transaction found")
 }
 
 func BroadcastOnBtc(dbconn *sql.DB) {

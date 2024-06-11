@@ -106,7 +106,7 @@ type BroadcastRefundMsgResp struct {
 	BroadcastRefundMsg []BroadcastRefundMsg
 }
 
-type BroadcastSweepMsg struct {
+type BroadcastTxSweepMsg struct {
 	ReserveId     string `json:"reserveId"`
 	RoundId       string `json:"roundId"`
 	SignedSweepTx string `json:"signedRefundTx"`
@@ -114,7 +114,7 @@ type BroadcastSweepMsg struct {
 }
 
 type BroadcastSweepMsgResp struct {
-	BroadcastSweepMsg []BroadcastSweepMsg
+	BroadcastTxSweepMsg []BroadcastTxSweepMsg
 }
 
 type RBFRequest struct {

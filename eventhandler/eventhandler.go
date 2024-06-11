@@ -94,6 +94,7 @@ func BroadcastSweep(dbconn *sql.DB) {
 	fmt.Println("broadcasting sweep transaction")
 	tx, err := utils.GetBroadCastedSweepTx()
 	if err != nil {
+		fmt.Println("Failed to get broadcasted sweep transaction : ", err)
 		return
 	}
 	sweepTx, err := utils.CreateTxFromHex(tx.SignedSweepTx)

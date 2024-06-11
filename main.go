@@ -46,6 +46,7 @@ func initialize() {
 
 func main() {
 	initialize()
+	eventhandler.BroadcastSweep(DbConn)
 	go eventhandler.NyksEventListener("broadcast_tx_sweep", "broadcastSweep", DbConn)
 	go utils.BroadcastOnBtc(DbConn)
 	go http.HandleFunc("/rbf", handleRequest)
