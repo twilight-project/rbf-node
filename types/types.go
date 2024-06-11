@@ -109,7 +109,7 @@ type BroadcastRefundMsgResp struct {
 type BroadcastTxSweepMsg struct {
 	ReserveId     string `json:"reserveId"`
 	RoundId       string `json:"roundId"`
-	SignedSweepTx string `json:"signedRefundTx"`
+	SignedSweepTx string `json:"signedsweepTx"`
 	JudgeAddress  string `json:"judgeAddress"`
 }
 
