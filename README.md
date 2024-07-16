@@ -11,7 +11,7 @@ This Node performs the following tasks
 ## Setup
 To run the RBF node please ensure the following pre reqs are completed.
 
-1. RBF node uses BTC core node / wallet to keep track of utxos and signing purposes respectively. so a bitcoin core wallet under users control and a node to which user can connect to is needed. please refer [here](https://bitcoin.org/en/full-node) on how t0 do this. 
+1. RBF node uses BTC core node / wallet to keep track of utxos and signing purposes respectively. so a bitcoin core wallet under users control and a node to which user can connect to is needed. please refer [here](https://bitcoin.org/en/full-node) on how to do this. 
 2. It also uses postgres sql to store the transaction until it is accepted. postgres needs to be setup and the schema provided below must be applied. please refer [here.](https://www.digitalocean.com/community/tutorials/how-to-install-postgresql-on-ubuntu-20-04-quickstart)
 3. A Nyks chain Node with api's enabled.
 
