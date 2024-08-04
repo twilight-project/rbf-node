@@ -13,10 +13,12 @@ import (
 	"strings"
 
 	"github.com/btcsuite/btcd/btcjson"
+	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/rpcclient"
 	"github.com/btcsuite/btcd/txscript"
-	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcd/wire" // Add this import statement
 	"github.com/spf13/viper"
 	"github.com/twilight-project/rbf-node/db"
 	"github.com/twilight-project/rbf-node/types"
@@ -26,7 +28,7 @@ func BtcToSats(btc float64) int64 {
 	return int64(btc * 1e8)
 }
 
-func GetFeeFromBtcNode(tx *wire.MsgTx) (int64, error) {
+func GetFeeFromBtcNode(tx *wire.MsgTx) (int64, int, error) {
 	client := getBitcoinRpcClient()
 	result, err := client.EstimateSmartFee(2, &btcjson.EstimateModeConservative)
 	if err != nil {
@@ -41,8 +43,8 @@ func GetFeeFromBtcNode(tx *wire.MsgTx) (int64, error) {
 	weight := (baseSize * 3) + totalSize
 	vsize := (weight + 3) / 4
 	fmt.Println("tx size in bytes : ", vsize)
-	fee := float64(vsize) * float64(feeRate/1024)
-	return int64(fee), nil
+	//fee := float64(vsize) * float64(feeRate/1024)
+	return feeRate, vsize, nil
 }
 
 func getBitcoinRpcClient() *rpcclient.Client {
@@ -75,6 +77,18 @@ func BroadcastBtcTransaction(tx *wire.MsgTx) {
 
 	defer client.Shutdown()
 	fmt.Println("broadcasted btc transaction, txhash : ", txHash)
+	
+}
+
+func DecodeTransaction(txStr string)(*btcjson.TxRawResult){
+	client := getBitcoinRpcClient()
+	// Decode the transaction hex string
+	txBytes, _ := hex.DecodeString(txStr)
+	rawTx, err:= client.DecodeRawTransaction(txBytes)
+	if err != nil {
+		fmt.Println("Failed to decode transaction : ", err)
+	}
+	return rawTx
 }
 
 func CreateTxFromHex(txHex string) (*wire.MsgTx, error) {
@@ -150,11 +164,11 @@ func GetUnspentUTXOs(walletName string) ([]btcjson.ListUnspentResult, error) {
 	defer client.Shutdown()
 
 	// Load the wallet
-	_, err := client.LoadWallet(walletName)
-	if err != nil {
-		fmt.Println("Failed to load wallet: ", err)
-		return nil, err
-	}
+	//_, err := client.LoadWallet(walletName)
+	//if err != nil {
+	//	fmt.Println("Failed to load wallet: ", err)
+	//	return nil, err
+	//}
 
 	// Get the unspent transaction outputs
 	utxos, err := client.ListUnspent()
@@ -162,11 +176,100 @@ func GetUnspentUTXOs(walletName string) ([]btcjson.ListUnspentResult, error) {
 		fmt.Println("Failed to get unspent UTXOs: ", err)
 		return nil, err
 	}
+	
 
 	return utxos, nil
 }
+func convertPsbtStringToPacket(psbtString string) (*wire.MsgTx, error) {
+	reader := strings.NewReader(psbtString)
+    // Convert the byte slice to a psbt.Packet
+    packet, err := psbt.NewFromRawBytes(reader, true)
+    if err != nil {
+        return nil, fmt.Errorf("failed to convert to psbt.Packet: %v", err)
+    }
+	tx, err:=psbt.Extract(packet)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract transaction from psbt: %v", err)
+	}
+    return tx, nil
+}
+func AddTestFeeUtxos(tx *wire.MsgTx, walletName string, fee int64){
+	client := getBitcoinRpcClient()
+	defer client.Shutdown()
+	// create a new transaction that will be used to cover the fee
+	// create an output with the amount of the fee
+	// let the wallet choose apropriate inputs to cover the fee
+	newFeeAddress, err := client.GetNewAddress(walletName)
+	if err != nil {
+		fmt.Println("Error getting new address for fee tx: ", err)
+		return
+	}
+	amount1 := btcutil.Amount(fee)
+	// create new PSBTOutput
+	output := btcjson.NewPsbtOutput(newFeeAddress.EncodeAddress(),amount1)
+	// Wrap the output in a slice
+    outputs := []btcjson.PsbtOutput{output}
+	changePosition := int64(1)
+	opts := &btcjson.WalletCreateFundedPsbtOpts{
+		ChangePosition: &changePosition,
+	}
+	// create a new transaction using the fee address
+	fundedResult, err := client.WalletCreateFundedPsbt([]btcjson.PsbtInput{}, outputs, nil, opts, nil)
+	if err != nil {
+		fmt.Println("Failed to create PSBT fee transaction: ", err)
+		return
+	}
+	// convert the psbt to hex
+	psbt := fundedResult.Psbt
+	isSign:= true
+	// sign the psbt 
+	signedPsbt, err := client.WalletProcessPsbt(psbt, &isSign, rpcclient.SigHashAll, nil)
+	if err != nil {
+		fmt.Println("Failed to sign PSBT: ", err)
+		return
+	}
+	fmt.Println("PSBT: ", signedPsbt.Psbt)
+	fmt.Println("Complete: ",signedPsbt.Complete)
+	// convert psbt to psbt.Packet
+	feeTx, err := convertPsbtStringToPacket(signedPsbt.Psbt)
+	if err != nil {
+		fmt.Println("Failed to convert PSBT string to packet: ", err)
+		return
+	}
+	// convert to hex
+	feeTxHex, _ := ConvertTxtoHex(feeTx)
+	// convert the psbt to hex
+	fmt.Println("Fee tx: ", feeTxHex)
+	// broadcast the fee transaction 
+	txHash, err := client.SendRawTransaction(feeTx, true)
+	if err != nil {
+		fmt.Println("Failed to broadcast fee transaction : ", err)
+		return
+	}
 
-func AddInputsToCoverFee(tx *wire.MsgTx, walletName string, fee int64) (*wire.MsgTx, int64, error) {
+	fmt.Println("broadcasted btc fee transaction, txhash : ", txHash)
+
+	outPoint := wire.NewOutPoint(txHash, 0)
+	txIn := wire.NewTxIn(outPoint, nil, nil)
+	tx.AddTxIn(txIn)
+		
+}
+func CombineRawTransactions(sweepTx *wire.MsgTx, feeTx *wire.MsgTx) *wire.MsgTx {
+	txIn := feeTx.TxIn[1] 
+	sweepTx.AddTxIn(txIn)
+	//remove the index 1 from sweeptx
+	sweepTx.TxIn = append(sweepTx.TxIn[:1], sweepTx.TxIn[1+1:]...)
+	return sweepTx
+}
+func ConvertTxtoHex(tx *wire.MsgTx) (string, error) {
+	var buf bytes.Buffer
+	if err := tx.Serialize(&buf); err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(buf.Bytes()), nil
+}
+func AddInputsToCoverFee(tx *wire.MsgTx, walletName string, fee int64) (*wire.MsgTx, int64, []btcjson.RawTxWitnessInput, error) {
 	client := getBitcoinRpcClient()
 	defer client.Shutdown()
 
@@ -175,7 +278,7 @@ func AddInputsToCoverFee(tx *wire.MsgTx, walletName string, fee int64) (*wire.Ms
 	for _, txIn := range tx.TxIn {
 		utxo, err := client.GetTxOut(&txIn.PreviousOutPoint.Hash, txIn.PreviousOutPoint.Index, true)
 		if err != nil {
-			return nil, 0, err
+			return nil, 0, nil, err
 		}
 		totalInputValue += int64(utxo.Value)
 	}
@@ -184,31 +287,36 @@ func AddInputsToCoverFee(tx *wire.MsgTx, walletName string, fee int64) (*wire.Ms
 	for _, txOut := range tx.TxOut {
 		totalOutputValue += int64(txOut.Value)
 	}
-
+	witnessInputs := make([]btcjson.RawTxWitnessInput,0)
 	feeInputs := int64(0)
 	// If the total input value is less than the estimated fee, add new inputs to the transaction
 	if totalInputValue-totalOutputValue < fee {
+		fmt.Println("Total input value is less than the estimated fee")
 		utxos, err := GetUnspentUTXOs(walletName)
 		if err != nil {
-			return nil, 0, err
+			return nil, 0, nil, err
 		}
-
+		// create witness utxo inputs here
+		// as the information is easily available here
+		fmt.Println("utxos: ", utxos)
 		for _, utxo := range utxos {
 			if totalInputValue-totalOutputValue >= fee {
 				if totalInputValue-totalOutputValue > fee {
 					addr, err := client.GetNewAddress(walletName)
 					if err != nil {
 						fmt.Println("Error getting new address: ", err)
-						return nil, 0, err
+						return nil, 0, nil, err
 					}
+					fmt.Println("new address", addr)
 
 					// Generate the pay-to-address script.
 					destinationAddrByte, err := txscript.PayToAddrScript(addr)
 					if err != nil {
 						fmt.Println("Error generating pay-to-address script:", err)
-						return nil, 0, err
+						return nil, 0, nil, err
 					}
 					amount := totalInputValue - totalOutputValue - fee
+					fmt.Println("amount: ", amount)
 					txOut := wire.NewTxOut(amount, destinationAddrByte)
 					tx.AddTxOut(txOut)
 				}
@@ -217,34 +325,35 @@ func AddInputsToCoverFee(tx *wire.MsgTx, walletName string, fee int64) (*wire.Ms
 
 			hash, err := chainhash.NewHashFromStr(utxo.TxID)
 			if err != nil {
-				return nil, 0, err
+				return nil, 0, nil, err
 			}
 			outPoint := wire.NewOutPoint(hash, utxo.Vout)
 			txIn := wire.NewTxIn(outPoint, nil, nil)
 			tx.AddTxIn(txIn)
+			// add witness information here
+			amountPtr:= &utxo.Amount
+			witness:= btcjson.RawTxWitnessInput{
+				Txid: utxo.TxID,
+				Vout: utxo.Vout,
+				ScriptPubKey: utxo.ScriptPubKey,
+				Amount: amountPtr,
 
+			}
+			witnessInputs = append(witnessInputs, witness)
 			totalInputValue += int64(utxo.Amount)
 			feeInputs += 1
 		}
 	}
-	return tx, feeInputs, nil
+	return tx, feeInputs, witnessInputs, nil
 }
 
-func SignNewFeeInputs(tx *wire.MsgTx, n int64) (*wire.MsgTx, error) {
+func SignNewFeeInputs(tx *wire.MsgTx, n int64, witness []btcjson.RawTxWitnessInput) (*wire.MsgTx, error) {
 	client := getBitcoinRpcClient()
-
-	inputs := tx.TxIn[int64(len(tx.TxIn))-n:]
-	witnessInputs := make([]btcjson.RawTxWitnessInput, len(inputs))
-	for i, input := range inputs {
-		witnessInputs[i] = btcjson.RawTxWitnessInput{
-			Txid: input.PreviousOutPoint.Hash.String(),
-			Vout: input.PreviousOutPoint.Index,
-		}
-	}
 
 	// Sign the new transaction
 
-	signedTx, _, err := client.SignRawTransactionWithWallet3(tx, witnessInputs, rpcclient.SigHashType(txscript.SigHashAll|txscript.SigHashAnyOneCanPay))
+	signedTx, complete, err := client.SignRawTransactionWithWallet3(tx, nil, "ALL")
+	fmt.Println("complete: ", complete)
 	if err != nil {
 		fmt.Println("Failed to sign transaction: ", err)
 		return nil, err
@@ -253,14 +362,6 @@ func SignNewFeeInputs(tx *wire.MsgTx, n int64) (*wire.MsgTx, error) {
 
 }
 
-func txToHex(tx *wire.MsgTx) (string, error) {
-	var buf bytes.Buffer
-	if err := tx.Serialize(&buf); err != nil {
-		return "", err
-	}
-
-	return hex.EncodeToString(buf.Bytes()), nil
-}
 
 func GetBroadCastedRefundTx() types.BroadcastRefundMsg {
 	nyksd_url := fmt.Sprintf("%v", viper.Get("nyksd_url"))
@@ -343,23 +444,35 @@ func DecodeBtcScript(script string) string {
 func GetHeightFromScript(script string) int64 {
 	// Split the decoded script into parts
 	height := int64(0)
+	part := 25
 	parts := strings.Split(script, " ")
 	if len(parts) == 0 {
 		return height
 	}
 	// Reverse the byte order
-	for i, j := 0, len(parts[0])-2; i < j; i, j = i+2, j-2 {
-		parts[0] = parts[0][:i] + parts[0][j:j+2] + parts[0][i+2:j] + parts[0][i:i+2] + parts[0][j+2:]
+	for i, j := 0, len(parts[part])-2; i < j; i, j = i+2, j-2 {
+		parts[part] = parts[part][:i] + parts[part][j:j+2] + parts[part][i+2:j] + parts[part][i:i+2] + parts[part][j+2:]
 	}
 	// Convert the first part from hex to decimal
-	height, err := strconv.ParseInt(parts[0], 16, 64)
+	height, err := strconv.ParseInt(parts[part], 16, 64)
 	if err != nil {
 		fmt.Println("Error converting block height from hex to decimal:", err)
 	}
 
 	return height
 }
-
+func CreateTxForFeeUtxo(){
+	//client:= getBitcoinRpcClient()
+	// create a new transaction
+	tx := wire.NewMsgTx(wire.TxVersion)
+	// add the inputs
+	// add the outputs
+	// add the witness information
+	// sign the transaction
+	// broadcast the transaction
+	//wireTransaction,_:= (tx)
+		BroadcastBtcTransaction(tx)
+}
 func CheckPinning(dbconn *sql.DB) {
 	client := getBitcoinRpcClient()
 	defer client.Shutdown()
@@ -505,3 +618,50 @@ func ConfirmTx(dbconn *sql.DB) {
 		}
 	}
 }
+
+
+// Initialize the map
+    // amounts := make(map[btcutil.Address]btcutil.Amount)
+	// amount1 := btcutil.Amount(fee) // takes value in Sats
+	// amounts[newFeeAddress] = amount1
+	// feeTx, err:= client.CreateRawTransaction(nil,amounts,nil)
+	// if err != nil {
+	// 	fmt.Println("Failed to create fee transaction: ", err)
+	// 	return
+	// }
+	// feeTxHex,_ := ConvertTxtoHex(feeTx)
+	// fmt.Println("Fee tx: ", feeTxHex)
+	// // fund the new transaction
+
+	// // Create a default FundRawTransactionOpts
+    // opts := btcjson.FundRawTransactionOpts{
+    //     ChangeAddress: nil, // or provide a valid address
+    //     ChangePosition: nil,
+    //     IncludeWatching: nil,
+    //     LockUnspents: nil,
+    //     FeeRate: nil,
+    //     SubtractFeeFromOutputs: nil,
+    //     Replaceable: nil,
+    //     ConfTarget: nil,
+    //     EstimateMode: nil,
+    // }
+	// isWitness := true
+	// fundedFeeTxResult, err := client.FundRawTransaction(feeTx, opts, &isWitness)
+	// if err != nil {
+	// 	fmt.Println("Failed to fund fee transaction: ", err)
+	// 	return
+	// }
+	// feeTxFunded := fundedFeeTxResult.Transaction
+	// // sign the tx 
+	// signedFeeTx, complete, err := client.SignRawTransactionWithWallet(feeTxFunded)
+	// if err != nil {
+	// 	fmt.Println("Failed to sign fee utxo creating transaction: ", err)
+	// 	return
+	// }
+	// if !complete {
+	// 	fmt.Println("Fee creation Transaction not complete")
+	// 	return
+	// }
+	// convert the tx to hex
+	//signedFeeTxHex, err := ConvertTxtoHex(signedFeeTx)
+	//fmt.Println("Signed Fee tx: ", signedFeeTxHex)

@@ -22,3 +22,9 @@ go.work
 *.trunk
 *.vscode
 *.DS_Store
+
+# ignore binaries
+rbf-node
+
+# ignore config files
+/configs/*

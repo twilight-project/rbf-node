@@ -99,40 +99,46 @@ func BroadcastSweep(dbconn *sql.DB) {
 	}
 	sweepTx, err := utils.CreateTxFromHex(tx.SignedSweepTx)
 	if err != nil {
-		fmt.Println("Failed to create sweep transaction : ", err)
+		fmt.Println("Failed to create sweep transaction from hex string: ", err)
 		return
 	}
-
+	
 	decodedScript := utils.DecodeBtcScript(hex.EncodeToString(sweepTx.TxIn[0].Witness[len(sweepTx.TxIn[0].Witness)-1]))
+	//println("decodedScript : ", decodedScript)
 	height := utils.GetHeightFromScript(decodedScript)
-
-	fee, err := utils.GetFeeFromBtcNode(sweepTx)
+	fmt.Println("Height: ", height)
+	feeRate, vsize, err := utils.GetFeeFromBtcNode(sweepTx)
 	if err != nil {
-		fmt.Println("Failed to get fee from btc node : ", err)
+		fmt.Println("Failed to get latest feeRate from btc node : ", err)
 		return
 	}
+	// adding 80 bytes to accomodate for fee input added to the tx later
+	fee := int64(float64(vsize+75) * float64(feeRate/1024))
+	fmt.Println("fee : ", fee)
+	//newTx, n, witnessInput, err := utils.AddInputsToCoverFee(sweepTx, "", fee)
+	utils.AddTestFeeUtxos(sweepTx, "", fee)
 
-	newTx, n, err := utils.AddInputsToCoverFee(sweepTx, "", fee)
-	if err != nil {
-		fmt.Println("Failed to add inputs to cover fee : ", err)
-		return
-	}
-	signedTx, err := utils.SignNewFeeInputs(sweepTx, n)
+	signedTx, err := utils.SignNewFeeInputs(sweepTx,1, nil)
 	if err != nil {
 		fmt.Println("Failed to sign new fee inputs : ", err)
 		return
 	}
 
-	fmt.Println("Fee for sweep transaction : ", fee)
-	fmt.Println("sweep transaction new inputs : ", newTx)
-	fmt.Println("sweep transaction signed inputs : ", signedTx)
-
-	var buf bytes.Buffer
-	err = signedTx.Serialize(&buf)
+	// serialize the new transaction
+	signedTxHex, err := utils.ConvertTxtoHex(signedTx)
 	if err != nil {
-		log.Fatalf("Failed to serialize transaction: %v", err)
+		fmt.Println("Failed to convert SignedTx into hex : ", err)
+		return
+	}
+	fmt.Println("signedTxHex after adding inputs: ", signedTxHex)
+	
+	 var buf bytes.Buffer
+	 err = signedTx.Serialize(&buf)
+	 if err != nil {
+	 	log.Fatalf("Failed to serialize transaction: %v", err)
 	}
 	byteArray := buf.Bytes()
 
+	fmt.Println("Final ByteArray : ", hex.EncodeToString(byteArray))
 	db.InsertSignedtx(dbconn, byteArray, height)
 }
